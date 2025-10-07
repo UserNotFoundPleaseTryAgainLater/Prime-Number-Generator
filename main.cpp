@@ -1,10 +1,10 @@
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <vector>
-#include <numeric>
 #include <cmath>
 #include <chrono>
+#include <limits>
+#include <cstdint>
 
 class Bitset {
   std::vector<uint64_t> data;
@@ -21,9 +21,7 @@ public:
 };
 
 constexpr unsigned short offsets[8] = {1, 7, 11, 13, 17, 19, 23, 29};
-constexpr short offsetLookup[31] = {
-  -1,0,-1,-1,-1,-1,-1,1,-1,-1,-1,2,-1,3,-1,-1,-1,4,-1,5,-1,-1,-1,6,-1,-1,-1,-1,-1,7,-1
-};
+constexpr short offsetLookup[31] = {-1,0,-1,-1,-1,-1,-1,1,-1,-1,-1,2,-1,3,-1,-1,-1,4,-1,5,-1,-1,-1,6,-1,-1,-1,-1,-1,7,-1};
 
 template <typename T>
 void WriteToFile(std::vector<T>& PrimeArray, Bitset& isPrime) {
@@ -46,63 +44,81 @@ void WriteToFile(std::vector<T>& PrimeArray, Bitset& isPrime) {
 template <typename T>
 std::vector<T> WheelFactorization(T inputSize) {
   std::vector<T> PrimeArray;
-  PrimeArray.push_back(2);
+  if (inputSize >= 2) PrimeArray.push_back(2);
   if (inputSize >= 3) PrimeArray.push_back(3);
   if (inputSize >= 5) PrimeArray.push_back(5);
   for (T iteration = 0; iteration <= inputSize / 30; iteration++) {
     for (const auto offset : offsets) {
-      if (iteration == 0 && offset == 1) continue;
-      if ((iteration * 30 + offset) > inputSize) break;
-      PrimeArray.push_back(iteration * 30 + offset);
+      T val = iteration * 30 + offset;
+      if (val <= 5) continue;
+      if (val > inputSize) break;
+      PrimeArray.push_back(val);
     }
   }
   return PrimeArray;
 }
 
 template <typename T>
-void PrimeGeneration(T input) {
-  auto start = std::chrono::steady_clock::now();
-  std::vector<T> PrimeArray = WheelFactorization(input);
-  Bitset isPrime(PrimeArray.size());
-  isPrime.set();
-  T sieveLimit = static_cast<T>(std::floor(std::sqrt(input))) + 1;
-  for (T i = 0; i < PrimeArray.size(); ++i) {
+void ClassicSieve(T input) {
+  Bitset isPrime(input + 1, true);
+  isPrime.set(0, false);
+  isPrime.set(1, false);
+  T sieveLimit = static_cast<T>(std::floor(std::sqrt(input)));
+  for (T i = 2; i <= sieveLimit; ++i) {
     if (!isPrime[i]) continue;
-    T prime = PrimeArray[i];
-    if (prime > sieveLimit) break;
-    for (T multiple = prime * prime; multiple <= input; multiple += prime) {
-      T mod = multiple % 30;
-      int off = offsetLookup[mod];
-      if (off == -1) continue;
-      T j = (multiple / 30) * 8 + off;
-      if (j < isPrime.size()) isPrime.set(j, false);
+    for (T multiple = i * i; multiple <= input; multiple += i) {
+      isPrime.set(multiple, false);
     }
   }
-  std::cout << "Searching for primes:\n";
-  auto end = std::chrono::steady_clock::now();
-  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  if (input <= 1000000) {
-    for (T i = 0; i < PrimeArray.size(); ++i) {
-      if (isPrime[i]) std::cout << PrimeArray[i] << " ";
-    }
-  } else {
-    WriteToFile(PrimeArray, isPrime);
+  for (T i = 2; i <= input; ++i) {
+    if (isPrime[i]) std::cout << i << " ";
   }
   std::cout << std::endl;
+}
+
+template <typename T>
+void PrimeGeneration(T input) {
+  auto start = std::chrono::steady_clock::now();
+  if (input < 1000000000) {
+    ClassicSieve(input);
+  } else {
+    std::vector<T> PrimeArray = WheelFactorization(input);
+    Bitset isPrime(PrimeArray.size(), true);
+    T sieveLimit = static_cast<T>(std::floor(std::sqrt(input)));
+    for (T i = 0; i < PrimeArray.size(); ++i) {
+      if (!isPrime[i]) continue;
+      T prime = PrimeArray[i];
+      if (prime > sieveLimit) break;
+      for (T j = i + 1; j < PrimeArray.size(); ++j) {
+        T num = PrimeArray[j];
+        if (num % prime == 0) isPrime.set(j, false);
+      }
+    }
+    if (input <= 1000000) {
+      for (T i = 0; i < PrimeArray.size(); ++i) {
+        if (isPrime[i]) std::cout << PrimeArray[i] << " ";
+      }
+      std::cout << "\n";
+    } else {
+      WriteToFile(PrimeArray, isPrime);
+    }
+  }
+  auto end = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
   float timeElapsed = std::round((elapsed.count() / 1000.0f) * 10) / 10.0f;
-  std::cout << "Process took " << timeElapsed << " seconds." << std::endl;
+  std::cout << "Process took " << timeElapsed << " seconds.\n";
 }
 
 int main() {
   unsigned long long input = 0;
-  std::cout << "Finding primes from 1 to what number? (max is 1 billion) ";
+  std::cout << "Finding primes from 1 to what number? (max is 10 billion) ";
   std::cin >> input;
   if (input < 2) {
-    std::cout << "No primes in this range." << std::endl;
+    std::cout << "No primes in this range.\n";
     return 0;
   }
-  if (input > 1000000000) {
-    std::cout << "Input is too large." << std::endl;
+  if (input > 10000000000ULL) {
+    std::cout << "Input too large.\n";
     return 0;
   }
   if (input <= std::numeric_limits<unsigned short>::max())
@@ -111,7 +127,7 @@ int main() {
     PrimeGeneration<unsigned int>(static_cast<unsigned int>(input));
   else if (input <= std::numeric_limits<unsigned long>::max())
     PrimeGeneration<unsigned long>(static_cast<unsigned long>(input));
-  else if (input <= std::numeric_limits<unsigned long long>::max())
+  else
     PrimeGeneration<unsigned long long>(static_cast<unsigned long long>(input));
   return 0;
 }
